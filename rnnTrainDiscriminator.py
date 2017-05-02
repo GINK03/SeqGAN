@@ -41,7 +41,7 @@ def train():
         print("now iter ", file=sys.stderr)
       line    = line.strip()
       print(line)
-      y, sent = line.split("__SEP_")
+      y, sent = line.split("__SEP__")
       ys      = float(y)
       chars   = list(sent)
       

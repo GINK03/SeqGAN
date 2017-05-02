@@ -30,10 +30,7 @@ with open("./tmp/char_index.pkl", "rb") as f:
   char_index = pickle.loads(f.read())
   index_char = { index:char for char, index in char_index.items() }
 
-if '--init' in sys.argv:
-  model = load_model("models/000000029.model")
-else: 
-  model = load_model("reinforceModels/reinfoce.model")
+model = load_model("geneModels/gene.model")
 
 
 """ バリアブルラーニングレートを設定して、動的に報酬を反映する """
@@ -57,10 +54,14 @@ with open("tmp/reinforce.txt", "r") as f:
       y[char_index[chars[i+5]]] = 1.0
       ys.append( y )
       print( chars[i:i+5], chars[i+5] ) 
+    try:
+      model.optimizer.lr = Adam(lr=0.001)
+      model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=score/1000.0))
 
-    model.optimizer.lr = Adam(lr=0.001)
-    model.compile(loss='categorical_crossentropy', optimizer=Adam(lr=score/1000.0))
-
-    model.fit(xs, ys, batch_size=64, epochs=5)
-    model.save("reinforceModels/reinfoce.model")
+      model.fit(xs, ys, batch_size=64, epochs=5)
+      model.save("geneModels/gene.model")
+      """ 連続で学習するとリソースエラーが起きることがある """
+    except Exception as e:
+      print(e)
+      time.sleep(20.0)
 

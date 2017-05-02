@@ -15,6 +15,8 @@ import glob
 import pickle
 import re
 import datetime
+import os
+
 
 def sample(preds, temperature=1.0):
   preds = np.asarray(preds).astype('float64')
@@ -25,9 +27,9 @@ def sample(preds, temperature=1.0):
   return np.argmax(probas)
 
 """ 一括で評価に使うデータセットを生成する """
-def bulkGenerate():
+def bulkGenerate(model_name):
   now   = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')
-  S_NUM = 1000
+  S_NUM = 50
   with open("./tmp/step4.pkl", "rb") as f:
     char_vec = pickle.loads(f.read())
 
@@ -35,7 +37,6 @@ def bulkGenerate():
     char_index = pickle.loads(f.read())
     index_char = { index:char for char, index in char_index.items() }
    
-  model_name = sorted(glob.glob("models/*.model"))[-1]
 
   model = load_model(model_name)
   
@@ -47,7 +48,10 @@ def bulkGenerate():
     negative  = []
     for i in range(100):
       if next_char is None or next_char != "*":
-        xs         = list(map(lambda x:char_vec[x], sent))
+        try:
+          xs         = list(map(lambda x:char_vec[x], sent))
+        except AttributeError as e:
+          continue
         preds      = model.predict(np.array([xs]), verbose=0)[0]
         next_index = sample(preds, diversity)
         next_char  = index_char[next_index]
@@ -85,5 +89,13 @@ def bulkGenerate():
 
 
 if __name__ == '__main__':
-  bulkGenerate()
-  
+  if '--seed' in sys.argv:
+    model_name = sorted(glob.glob("models/*.model"))[-1]
+    bulkGenerate(model_name)
+    
+    os.system("cp {mn} geneModels/gene.model".format(mn=model_name))
+ 
+  else:
+    model_name = "geneModels/gene.model"
+    bulkGenerate(model_name)
+    
