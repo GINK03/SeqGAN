@@ -27,7 +27,7 @@ def sample(preds, temperature=1.0):
 """ 一括で評価に使うデータセットを生成する """
 def bulkGenerate():
   now   = datetime.datetime.now().strftime('%Y_%m_%d_%H_%M')
-  S_NUM = 100
+  S_NUM = 1000
   with open("./tmp/step4.pkl", "rb") as f:
     char_vec = pickle.loads(f.read())
 

@@ -63,7 +63,7 @@ def train(mode):
   counter = 0
   with open("tmp/step2", "r") as f:
     for fi, line in enumerate(f):
-      if counter > 40000:
+      if counter > 15000:
         break
       if fi%1000 == 0:
         print("now iter {counter}".format(counter=counter), file=sys.stderr)
