@@ -5,6 +5,8 @@ import re
 import pickle
 import numpy as np
 import sys
+import concurrent.futures 
+import os.path
 MAXLEN = 30
 PADD   = '<PAD>'
 
@@ -65,20 +67,44 @@ def toIndexAndReguration():
 
   # to indexies
   indexed = [ [term_index[term] for term in text] for text in pads]
+ 
+  buff = []
+  import copy
+  for e, text in enumerate( indexed ):
+    to = copy.copy( text )
+    for i in range(len(text)):
+      terminal = [0.0]*2049
+      terminal[text[i]] = 1.0
+      to[i]  = terminal
+    buff.append( to )
+
+    if len( buff ) == 1000: 
+      open('indexed_%09d.pkl'%e, 'wb').write( pickle.dumps(buff) ) 
+      buff = [] 
+
+def _makePair(name):
+  print('deal', name)
+  number = re.search(r'(\d{1,})', name).group(1)
   
-  open('indexed.pkl', 'wb').write( pickle.dumps(indexed) ) 
-   
-def makePair():
-  indexed = pickle.loads( open('indexed.pkl', 'rb').read() )
+  savename = 'dataset_%s.pkl'%number
+  if os.path.exists(savename):
+    return None
+  indexed = pickle.loads( open(name, 'rb').read() )
 
   pairs = []
   for text in indexed:
     seed = np.random.randn(20)
     pairs.append( (seed, np.array(text) ) )
   
-  xs = [ pair[0] for pair in pairs ]
-  ys = [ pair[1] for pair in pairs ]
-  open('dataset.pkl', 'wb').write( pickle.dumps( (xs, ys) ) )
+  xs = np.array( [ pair[0] for pair in pairs ] , dtype=float)
+  ys = np.array( [ pair[1] for pair in pairs ] , dtype=float)
+  open(savename, 'wb').write( pickle.dumps( (xs, ys) ) )
+
+def makePair():
+  names = sorted( [name for name in glob.glob('indexed_*.pkl') ] )
+  _makePair( names[0] )
+  with concurrent.futures.ProcessPoolExecutor(max_workers=3) as executor:
+    executor.map( _makePair, names )
 
     
   
