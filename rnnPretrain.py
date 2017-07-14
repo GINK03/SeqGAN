@@ -2,7 +2,7 @@ from __future__ import print_function
 from keras.models import Sequential, load_model, Model
 from keras.layers import Dense, Activation
 from keras.layers import LSTM, GRU, SimpleRNN, Input, RepeatVector
-from keras.layers.core import Dropout, Lambda
+from keras.layers.core import Dropout, Lambda, Flatten, Reshape
 from keras.optimizers import RMSprop, Adam
 from keras.utils.data_utils import get_file
 from keras.layers.normalization import BatchNormalization as BN
@@ -20,34 +20,48 @@ import re
 
 WIDTH       = 2029
 MAXLEN      = 31
-INPUTLEN    = 20
-ACTIVATOR   = 'relu'
-DO          = Dropout(0.1)
+INPUTLEN    = 1000
 inputs      = Input( shape=(INPUTLEN, ) ) 
-repeat      = RepeatVector(31)(inputs)
-generated   = Bi( GRU(512, kernel_initializer='lecun_uniform', activation=ACTIVATOR, return_sequences=True) )( repeat )
-generated   = TD( Dense(2049, kernel_initializer='lecun_uniform', activation='sigmoid') )( generated )
-generated   = Lambda( lambda x:x*2.0 )(generated)
+#enc         = Dense(2024, activation='linear')( inputs )
+#enc         = Dense(1024, activation='tanh')( enc )
+repeat      = RepeatVector(31)( inputs )
+generated   = Bi( GRU(256, return_sequences=True) )( repeat )
+generated   = TD( Dense(2049, activation='relu') )( generated )
+generated   = TD( Dense(2049, activation='softmax') )( generated )
 generator   = Model( inputs, generated )
 
-generator.compile( optimizer=Adam(), loss='categorical_crossentropy' )
+#generated   = Lambda( lambda x:x*2.0 )(generated)
+
+adhoc       = Model( inputs, generated )
+adhoc.compile( optimizer=Adam(), loss='categorical_crossentropy' )
 
 def train():
-  for name in glob.glob('utils/dataset_*.pkl'):
-    try:
-      dataset = pickle.loads( open(name, 'rb').read()  )
-    except EOFError as e:
-      continue
+  for ge, name in enumerate( glob.glob('utils/dataset_*.pkl')[:1] ):
+    dataset = pickle.loads( open(name, 'rb').read()  )
     xs, ys  = dataset
-    # - print( xs.shape )
-    # - print( ys.shape )
-    generator.fit( xs, ys, epochs=100)
-
+    for e in range(10):
+      adhoc.fit( xs, ys, epochs=50 )
+      adhoc.save_weights('models/adhoc_seed_%09d.h5'%e)
+# - 偽のデータセットを作成する
+def gen():
+  term_index = pickle.loads( open('utils/term_index.pkl', 'rb').read() ) 
+  index_term = { index:term for term, index in term_index.items() }
+  adhoc.load_weights( 'models/adhoc_seed_000000003.h5' )
+  xs = np.random.randn(10000, 1000) 
+  res = adhoc.predict(xs)
+  print( res.shape )
+  with open('negative.data.txt', 'w') as f: 
+    for e, rs in enumerate( res.tolist() ):
+      print('0.0 ')
+      for i, r in enumerate( rs ):   
+        #print( index_term[np.argmax(r)], end=" " )
+        f.write('%s '%index_term[np.argmax(r)] )
+      print('\n')
 
 def main():
   if '--train' in sys.argv:
      train()
-  if '--eval' in sys.argv:
-     eval()
+  if '--gen' in sys.argv:
+     gen()
 if __name__ == '__main__':
   main()
