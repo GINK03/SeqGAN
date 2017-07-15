@@ -52,24 +52,29 @@ def build_model():
   model.compile(optimizer=opts, loss='binary_crossentropy', metrics=['accuracy'])
   return model
 
-model = build_model()
+discriminator = build_model()
 
-term_index = pickle.loads( open('utils/term_index.pkl', 'rb').read() )
-with open('mix.data.txt') as f:
-  ys = []
-  xs = []
-  for line in f:
-    if line == '' : 
-      continue
-    line = line.strip()
-    ents = line.split()
-    weight = float( ents.pop(0) )
-    x = [ int(term_index[x]) for x in ents ]
-    ys.append( weight )
-    xs.append( x )
+def generate_mix():
+  term_index = pickle.loads( open('utils/term_index.pkl', 'rb').read() )
+  with open('mix.data.txt') as f:
+    ys = []
+    xs = []
+    for line in f:
+      if line == '' : 
+        continue
+      line = line.strip()
+      ents = line.split()
+      weight = float( ents.pop(0) )
+      x = [ int(term_index[x]) for x in ents ]
+      ys.append( weight )
+      xs.append( x )
 
-  ys = np.array( ys )
-  xs = np.array( xs )
-  for i in range(10):
-    model.fit( xs, ys, validation_split=0.05, epochs=5 )
-    model.save_weights('models/disc_%09d.h5'%i)
+    ys = np.array( ys )
+    xs = np.array( xs )
+    for i in range(10):
+      discriminator.fit( xs, ys, validation_split=0.05, epochs=5 )
+      discriminator.save_weights('models/disc_%09d.h5'%i)
+
+if __name__ == '__main__':
+  if '--step1' in sys.argv:
+    generate_mix()

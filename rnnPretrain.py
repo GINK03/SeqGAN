@@ -35,7 +35,7 @@ generator   = Model( inputs, generated )
 adhoc       = Model( inputs, generated )
 adhoc.compile( optimizer=Adam(), loss='categorical_crossentropy' )
 
-def train():
+def train_base():
   for ge, name in enumerate( glob.glob('utils/dataset_*.pkl')[:1] ):
     dataset = pickle.loads( open(name, 'rb').read()  )
     xs, ys  = dataset
@@ -44,7 +44,7 @@ def train():
       adhoc.save_weights('models/adhoc_seed_%09d.h5'%e)
 # - 偽のデータセットを作成する
 # - 正しいデータと混ぜ合わせて判別機を作る
-def gen():
+def gen_base():
   term_index = pickle.loads( open('utils/term_index.pkl', 'rb').read() ) 
   index_term = { index:term for term, index in term_index.items() }
   adhoc.load_weights( 'models/adhoc_seed_000000009.h5' )
@@ -59,7 +59,7 @@ def gen():
           f.write('%s '%index_term[np.argmax(r)] )
         f.write('\n')
 
-def mix():
+def mix_base():
   term_index = pickle.loads( open('utils/term_index.pkl', 'rb').read() )
   corpus     = pickle.loads( open('utils/corpus.pkl', 'rb').read() )
   mix = []
@@ -87,10 +87,10 @@ def mix():
       f.write( ' '.join(m) + '\n' )
 def main():
   if '--train' in sys.argv:
-     train()
+     train_base()
   if '--gen' in sys.argv:
-     gen()
+     gen_base()
   if '--mix' in sys.argv:
-     mix()
+     mix_base()
 if __name__ == '__main__':
   main()
