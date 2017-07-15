@@ -28,12 +28,12 @@ repeat      = RepeatVector(31)( inputs )
 generated   = Bi( GRU(256, return_sequences=True) )( repeat )
 generated   = TD( Dense(2049, activation='relu') )( generated )
 generated   = TD( Dense(2049, activation='softmax') )( generated )
-generator   = Model( inputs, generated )
+#generator   = Model( inputs, generated )
 
 #generated   = Lambda( lambda x:x*2.0 )(generated)
 
-adhoc       = Model( inputs, generated )
-adhoc.compile( optimizer=Adam(), loss='categorical_crossentropy' )
+generator       = Model( inputs, generated )
+generator.compile( optimizer=Adam(), loss='categorical_crossentropy' )
 
 def train_base():
   for ge, name in enumerate( glob.glob('utils/dataset_*.pkl')[:1] ):
