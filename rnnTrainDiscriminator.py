@@ -1,12 +1,15 @@
 from __future__ import print_function
 from keras.models import Sequential, load_model
-from keras.layers import Dense, Activation
-from keras.layers import LSTM, GRU, SimpleRNN
-from keras.layers.core import Dropout
+from keras.layers import Dense, Activation, Input
+from keras.layers.merge import Concatenate
+from keras.layers import LSTM, GRU, Convolution2D, MaxPooling2D, ZeroPadding2D
+from keras.layers.core import Dropout, Reshape, Flatten
 from keras.optimizers import RMSprop, Adam
 from keras.utils.data_utils import get_file
 from keras.layers.normalization import BatchNormalization as BN
 from keras.callbacks import LearningRateScheduler as LRS
+from keras.layers.embeddings import Embedding
+from keras.models import Model
 import numpy as np
 import random
 import sys
@@ -14,105 +17,59 @@ import glob
 import pickle
 import re
 
-
+SEQLEN          = 31
+embedding_dim   = 256
+vocabulary_size = 2049
+num_filters     = 512
+#filter_sizes    = [(3,256),(4,256),(5,256),(1,256),(2,256)]
+filter_sizes    = [3,4,5,1,2]
+drop            = 0.5
 def build_model():
-  model = Sequential()
-  model.add(GRU(128, return_sequences=False, input_shape=(128, 512)))
-  model.add(Dense(1))
-  model.add(Activation('sigmoid'))
-  optimizer = Adam()
-  model.compile(loss='binary_crossentropy', optimizer=optimizer) 
+  
+  inputs        = Input(shape=(SEQLEN,), dtype='int32')
+  embedding     = Embedding(output_dim=embedding_dim, input_dim=vocabulary_size, input_length=SEQLEN)(inputs)
+  reshape       = Reshape((SEQLEN,embedding_dim,1))(embedding)
+
+  conv_0        = Convolution2D(512, (3, 256), padding='valid', kernel_initializer='normal', activation='relu')(reshape)
+  conv_1        = Convolution2D(512, (4, 256), padding='valid', kernel_initializer='normal', activation='relu')(reshape)
+  conv_2        = Convolution2D(512, (5, 256), padding='valid', kernel_initializer='normal', activation='relu')(reshape)
+  conv_3        = Convolution2D(512, (1, 256), padding='valid', kernel_initializer='normal', activation='relu')(reshape)
+  conv_4        = Convolution2D(512, (2, 256), padding='valid', kernel_initializer='normal', activation='relu')(reshape)
+
+  maxpool_0     = MaxPooling2D(pool_size=(SEQLEN - 3 + 1, 1),  strides=(1,1), padding='valid')(conv_0)
+  maxpool_1     = MaxPooling2D(pool_size=(SEQLEN - 4 + 1, 1),  strides=(1,1), padding='valid')(conv_1)
+  maxpool_2     = MaxPooling2D(pool_size=(SEQLEN - 5 + 1, 1),  strides=(1,1), padding='valid')(conv_2)
+  maxpool_3     = MaxPooling2D(pool_size=(SEQLEN - 1 + -3, 1), strides=(1,1), padding='valid')(conv_3)
+  maxpool_4     = MaxPooling2D(pool_size=(SEQLEN - 2 + -2, 1), strides=(1,1), padding='valid')(conv_4)
+
+  merged_tensor = Concatenate(axis=1)([maxpool_0, maxpool_1, maxpool_2, maxpool_3, maxpool_4])
+  flatten       = Flatten()( merged_tensor )
+  dropout       = Dropout( drop )( flatten )
+  output        = Dense( 1, activation='sigmoid' )( dropout )
+
+  model         = Model(inputs, output)
+  opts          = Adam()
+  model.compile(optimizer=opts, loss='binary_crossentropy', metrics=['accuracy'])
   return model
 
-def train():
-  with open("./tmp/step4.pkl", "rb") as f:
-    char_vec = pickle.loads(f.read())
+model = build_model()
 
-  with open("./tmp/char_index.pkl", "rb") as f:
-    char_index = pickle.loads(f.read())
-    index_char = { index:char for char, index in char_index.items() }
+term_index = pickle.loads( open('utils/term_index.pkl', 'rb').read() )
+with open('mix.data.txt') as f:
+  ys = []
+  xs = []
+  for line in f:
+    if line == '' : 
+      continue
+    line = line.strip()
+    ents = line.split()
+    weight = float( ents.pop(0) )
+    x = [ int(term_index[x]) for x in ents ]
+    ys.append( weight )
+    xs.append( x )
 
-  Xs, Ys = [], []
-  print("start to load data to memory...")
-  target_file = sorted(glob.glob("tmp/sample_*.txt"))[-1]
-  with open(target_file, "r") as f:
-    for fi, line in enumerate(f):
-      if fi%1000 == 0:
-        print("now iter ", file=sys.stderr)
-      line    = line.strip()
-      print(line)
-      y, sent = line.split("__SEP__")
-      ys      = float(y)
-      chars   = list(sent)
-      
-      """ 128字にカット """
-      chars   = chars[:128]
-
-      """ 128字に満たないのはパッディングする """
-      b = ["*"]*(128 - len(chars) )
-      b += chars
-      chars = b
-      print(len(chars))
-      print(chars)
-      try:
-        xs = list( map(lambda x:char_vec[x], chars)  )
-      except KeyError as e:
-        continue
-
-      Xs.append(xs)
-      Ys.append(ys)
-  print("finished heaping memory...")
-  Xs, Ys = np.array(Xs), np.array(Ys)
-  print("try to create model...")
-  model = build_model()
-  model.fit(Xs, Ys, batch_size=64, epochs=20)
-  model.save("{target_file}.disc.model".format(target_file=target_file))
-
-
-  """ 判別値を出力する """
-  preds = []
-  with open(target_file, "r") as f:
-    for fi, line in enumerate(f):
-      line    = line.strip()
-      y, sent = line.split("__SEP__")
-      ys      = float(y)
-      chars   = list(sent)
-      
-      if ys != 0.0:
-        continue
-
-      """ 128字にカット """
-      chars   = chars[:128]
-
-      """ 128字に満たないのはパッディングする """
-      b = ["*"]*(128 - len(chars) )
-      b += chars
-      chars = b
-      
-      xs = list( map(lambda x:char_vec[x], chars)  )
-
-      pred = model.predict(np.array([xs]))[0].tolist()[0]
-      print(pred)
-      preds.append(pred)
-
-  """ 報酬を計算してファイルに出力 """
-  maxProb = max(preds)
-  preds   = list(map(lambda x:x/maxProb, preds))
-  with open(target_file, "r") as f, open("tmp/reinforce.txt", "w") as t:
-    for fi, line in enumerate(f):
-      line    = line.strip()
-      y, sent = line.split("__SEP__")
-      ys      = float(y)
-      chars   = list(sent)
-      
-      if ys != 0.0:
-        continue
-      """ 128字にカット """
-      chars   = chars[:128]
-      score   = preds.pop(0)
-      save = "%s__SEP__%s"%( str(score), " ".join(chars) )
-      t.write(save + "\n")
-
-
-
-train()
+  ys = np.array( ys )
+  xs = np.array( xs )
+  for i in range(10):
+    model.fit( xs, ys, validation_split=0.05, epochs=5 )
+    model.save_weights('models/disc_%09d.h5'%i)

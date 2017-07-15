@@ -43,25 +43,54 @@ def train():
       adhoc.fit( xs, ys, epochs=50 )
       adhoc.save_weights('models/adhoc_seed_%09d.h5'%e)
 # - 偽のデータセットを作成する
+# - 正しいデータと混ぜ合わせて判別機を作る
 def gen():
   term_index = pickle.loads( open('utils/term_index.pkl', 'rb').read() ) 
   index_term = { index:term for term, index in term_index.items() }
-  adhoc.load_weights( 'models/adhoc_seed_000000003.h5' )
-  xs = np.random.randn(10000, 1000) 
-  res = adhoc.predict(xs)
-  print( res.shape )
+  adhoc.load_weights( 'models/adhoc_seed_000000009.h5' )
   with open('negative.data.txt', 'w') as f: 
-    for e, rs in enumerate( res.tolist() ):
-      print('0.0 ')
-      for i, r in enumerate( rs ):   
-        #print( index_term[np.argmax(r)], end=" " )
-        f.write('%s '%index_term[np.argmax(r)] )
-      print('\n')
+    for j in range(8):
+      xs = np.random.randn(10000, 1000) 
+      res = adhoc.predict(xs)
+      for e, rs in enumerate( res.tolist() ):
+        f.write('0.0 ')
+        for i, r in enumerate( rs ):   
+          #print( index_term[np.argmax(r)], end=" " )
+          f.write('%s '%index_term[np.argmax(r)] )
+        f.write('\n')
 
+def mix():
+  term_index = pickle.loads( open('utils/term_index.pkl', 'rb').read() )
+  corpus     = pickle.loads( open('utils/corpus.pkl', 'rb').read() )
+  mix = []
+  for cor in corpus:
+    base = ['<PAD>'] * 31
+    try:
+      for e, term in enumerate( cor ):
+        term_index[term]
+        base[e] = term
+    except KeyError as e:
+      continue
+
+    base.insert(0, '1.0')
+    mix.append( base )
+  print(len(mix))
+  for line in open('negative.data.txt').read().split('\n'):
+    if line == '':
+      continue
+    ls = line.split()
+    mix.append( ls )
+
+  random.shuffle( mix )
+  with open('mix.data.txt', 'w') as f:
+    for m in mix:
+      f.write( ' '.join(m) + '\n' )
 def main():
   if '--train' in sys.argv:
      train()
   if '--gen' in sys.argv:
      gen()
+  if '--mix' in sys.argv:
+     mix()
 if __name__ == '__main__':
   main()
